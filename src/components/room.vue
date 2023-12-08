@@ -190,7 +190,7 @@ export default{
     height: 20%;
 }
 #main{
-    background-color: aqua;
+    /* background-color: aqua; */
     position: absolute;
     width: 80%;
     height: 80%;
@@ -202,13 +202,13 @@ export default{
     position: absolute;
     width: 70%;
     height: 100%;
-    background-color: antiquewhite;
+    /* background-color: antiquewhite; */
 }
 #right{
     position: absolute;
     left: 70%;
     width: 30%;
     height: 100%;
-    background-color: blueviolet;
+    /* background-color: blueviolet; */
 }
 </style>

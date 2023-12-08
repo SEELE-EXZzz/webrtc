@@ -1,5 +1,5 @@
 <template>
-    <div id="chat">
+    <div id="chat" >
         <div id="roomAndUser">
             <div class="roomAndUser">
                 房间号:{{ room }}
@@ -8,7 +8,7 @@
                 用户:{{user}},{{otherUser}}  
             </div>
         </div>
-        <div id="chatContent">
+        <div id="chatContent" @dragover="fileEnter" @drop="fileLeave">
             <div v-for="msgObj in chatMsgList" class="chatMsgDiv">
                 <div v-if="msgObj.msgType==='get'" id="leftMsg">   
                     <div id="leftAvatar">
@@ -87,6 +87,11 @@
             </div>
         </div>
         <div id="send">
+            <div v-if="showEmoji" id="emojiBox" @click="clickEmoji">
+                <div v-for="emoji in emojiList" style="width: 30px;height: 30px;">
+                    <div v-html="emoji" style="width: 24px;height: 24px;margin: 3px;"></div>
+                </div>
+            </div>
             <div id="sendButton">
                 <ul>                  
                     <li class="iconBox" title="创建头像" @click="createAvatar">
@@ -101,9 +106,9 @@
                     <li class="iconBox" title="发送文件" @click="sendFile">
                         <svg t="1701659527057" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="31921" width="200" height="200"><path d="M357.285 86c41.5 0 77.11 25.2 92.347 61.126V143.5h260.02c81.791 0 148.269 65.52 149.59 146.87l0.02 2.47 0.002 6.747C898.87 319.726 926 360.847 926 408.301V803.6c0 73.675-59.759 133.4-133.475 133.4h-619.05C99.76 937 40 877.275 40 803.6V224c0-76.215 61.82-138 138.078-138h179.207z m0.759 59.8H178.078c-42.781 0-77.543 34.315-78.234 76.907l-0.01 1.293v579.6c0 40.242 32.314 72.94 72.424 73.59l1.217 0.01h619.05c40.264 0 72.981-32.296 73.631-72.383l0.01-1.217V408.3c0-33.953-27.265-61.542-61.107-62.09l-1.028-0.01H554.196c-85.562 0-155.085-68.628-156.467-153.813l-0.021-2.586v-3.6c0-22.06-17.69-39.99-39.664-40.401z m155.332 301.584c13.827-13.623 36.03-13.623 49.858 0l141.784 139.693 0.387 0.388c6.526 6.633 9.828 15.263 9.892 23.917v0.845c-0.065 8.824-3.497 17.623-10.28 24.306L563.235 776.225c-13.828 13.624-36.03 13.624-49.858 0a34.49 34.49 0 0 1-0.363-0.362c-13.364-13.565-13.202-35.396 0.363-48.76l89.258-87.941h-320.23c-16.523 0-29.917-13.395-29.917-29.917 0-16.523 13.394-29.917 29.917-29.917h315.033l-84.061-82.821-0.403-0.403c-13.164-13.398-13.19-34.928 0.04-48.357 0.12-0.122 0.241-0.243 0.363-0.363zM709.653 203.3l-251.175 0.001c6.57 46.96 46.921 83.1 95.718 83.1H799.2c-3.275-45.952-41.319-82.333-88.062-83.089l-1.485-0.012z" fill="#333333" p-id="31922"></path></svg>
                     </li>
-                    <li class="iconBox" title="创建画布" @click="">
+                    <!-- <li class="iconBox" title="你猜我画" @click="">
                         <svg t="1701661060768" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="13285" width="200" height="200"><path d="M550.912 961.536h-3.072c-72.704-1.024-125.952-52.224-145.408-138.24C368.64 671.744 307.2 677.888 222.208 687.104c-49.152 5.12-104.448 11.264-146.432-26.624-33.792-30.72-49.152-81.92-49.152-160.768C26.624 258.048 223.232 61.44 464.896 61.44c193.536 0 366.592 130.048 420.864 316.416 6.144 21.504-6.144 44.032-27.648 51.2-21.504 6.144-44.032-6.144-51.2-27.648-44.032-151.552-184.32-257.024-342.016-257.024-196.608 0-356.352 159.744-356.352 356.352 0 69.632 14.336 93.184 22.528 100.352 14.336 13.312 47.104 9.216 82.944 6.144 87.04-9.216 219.136-23.552 269.312 199.68 16.384 73.728 54.272 73.728 66.56 74.752h1.024C634.88 879.616 768 754.688 808.96 595.968c6.144-21.504 27.648-34.816 50.176-29.696 21.504 6.144 34.816 27.648 29.696 50.176-49.152 185.344-205.824 345.088-337.92 345.088z" fill="#333C4F" p-id="13286"></path><path d="M240.64 458.752m-69.632 0a69.632 69.632 0 1 0 139.264 0 69.632 69.632 0 1 0-139.264 0Z" fill="#333C4F" p-id="13287"></path><path d="M442.368 296.96m-52.224 0a52.224 52.224 0 1 0 104.448 0 52.224 52.224 0 1 0-104.448 0Z" fill="#333C4F" p-id="13288"></path><path d="M658.432 366.592m-43.008 0a43.008 43.008 0 1 0 86.016 0 43.008 43.008 0 1 0-86.016 0Z" fill="#333C4F" p-id="13289"></path><path d="M518.144 654.336c-17.408 0-32.768-10.24-38.912-27.648-7.168-21.504 4.096-45.056 25.6-52.224L946.176 419.84c21.504-7.168 45.056 4.096 52.224 25.6 7.168 21.504-4.096 45.056-25.6 52.224L531.456 652.288c-5.12 1.024-9.216 2.048-13.312 2.048z" fill="#333C4F" p-id="13290"></path></svg>
-                    </li>
+                    </li> -->
                 </ul>
                 
             </div>
@@ -140,13 +145,25 @@ export default{
             room:'',
             user:'',
             otherUser:'',
-            avatarURL:''
+            avatarURL:'',
+            emojiList:['&#x1F600','&#x1F604','&#x2764','&#x1F602','&#x1F44F','&#x1F3A7','&#x1F60D','&#x1F4AA','&#x1F4B0','&#x1F618'],
+            showEmoji:false,
         }
     },
     methods:{
         /*
             与聊天相关的按钮的点击事件
         */
+        fileEnter(e){
+            e.preventDefault()
+            e.target.style.backgroundColor = 'rgba(100,100,100,0.2)'
+        },//文件拖动到到聊天区时触发的事件
+        fileLeave(e){
+            e.preventDefault()
+            e.target.style.backgroundColor = '#f5f5f5'
+            let file = e.dataTransfer.files[0]
+            this.fileSlice(file)
+        },//文件拖动到聊天区后触发的事件
         async createAvatar(){
             let file =await this.getFile()
             let read = new FileReader()
@@ -168,7 +185,10 @@ export default{
             })
         },
         emoji(){
-
+            this.showEmoji = this.showEmoji?false:true
+        },
+        clickEmoji(e){
+            this.chatMsg += e.target.innerHTML
         },
         async sendImage(){
             let file =await this.getFile({
@@ -349,7 +369,7 @@ export default{
         this.socket.on('sendImage',(arrayBuffer,index,total,timestamp,type,fileName,size)=>{
             let list = getImageMap.get(timestamp)||[]
             list.push({arrayBuffer,index})
-            console.log(list,total)
+            getImageMap.set(timestamp,list)
             if(list.length===total){
                 let img = document.querySelector(`#_${timestamp}`)
                 list.sort((a,b)=>{a.index-b.index})
@@ -422,6 +442,20 @@ export default{
 </script>
 
 <style scoped>
+#emojiBox{
+    position: absolute;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    width: 200px;
+    height: 200px;
+    background-color: white;
+    top: -200px;
+    left: 80px;
+    border-radius: 8px;
+    border: 1px solid #E5E9EF;
+    box-shadow: 0 11px 12px 0 rgba(106, 115, 133, 0.3);
+}
 p{
     margin: 0px;
 }
