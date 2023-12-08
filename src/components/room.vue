@@ -44,8 +44,6 @@ export default{
             user:'', 
             userType:'',//如果是send则是发送方，如果是get则是接收方
             pc:'', //pc为rtcpeerConnection的实例对象
-            offer:'',
-            answer:'',
             candidate:'',
             disabledList:[false,false,false,false],
             live:false //判断是否在通信
@@ -61,37 +59,36 @@ export default{
             let local = document.querySelector('#local')
             local.srcObject = this.stream
             local.oncanplay=()=>{local.play()} 
-            this.pc = new RTCPeerConnection()
-            await this.pc.addStream(this.stream)
-            //向服务器发送房间号，用以确认该客户端是发送方还是接收方。
-            this.socket.emit('getOfferRoom',this.room)
-            this.socket.on('getUserType',async(userType,offer)=>{
-                /*
-                    如果是发送方需要创建offer并发送给服务器并将offer设置到本地描述，同时监听服务器接收answer。
-                    如果服务器返回answer需要将answer设置远端描述。
-                    如果是接收方则将offer设置到远端描述并创建answer同时将answer设置成本地描述然后向服务器发送answer。
-                */
-                if(!this.userType&&userType==='send'){
-                    this.userType = 'send'
-                    let offer = await this.pc.createOffer()
-                    this.offer = offer
-                    await this.pc.setLocalDescription(offer)
-                    this.socket.emit('sendOffer',offer,this.room)
-                    this.socket.on('getAnswer',async(answer)=>{
-                        await this.pc.setRemoteDescription(answer)
-                        this.pc.addIceCandidate(this.candidate)
-                    })
-                }else if(!this.userType&&userType==='get'){
-                    this.userType = 'get'
-                    await this.pc.setRemoteDescription(offer)
-                    let answer = await this.pc.createAnswer()
-                    this.answer = answer
-                    await this.pc.setLocalDescription(answer)
-                    this.socket.emit('sendAnswer',answer,this.room)
-                    this.pc.addIceCandidate(this.candidate)
+            if(!this.pc){
+              this.pc = new RTCPeerConnection() 
+              await this.pc.addStream(this.stream) 
+            }else{
+                const senders = this.pc.getSenders()
+                senders.forEach(sender => {
+                if (sender.track.kind === 'video') {
+                    sender.replaceTrack(this.stream.getVideoTracks()[0])
+                } else if (sender.track.kind === 'audio') {
+                    sender.replaceTrack(this.stream.getAudioTracks()[0])
                 }
-                this.userType = userType
-            })
+                })
+            }
+            //如果是第一次连接的话,向服务器发送房间号，用以确认该客户端是发送方还是接收方。
+            if(!this.userType){
+                this.socket.emit('getOfferRoom',this.room)
+                this.socket.on('getUserType',async(userType,offer)=>{
+                    /*
+                        如果是发送方需要创建offer并发送给服务器并将offer设置到本地描述，同时监听服务器接收answer。
+                        如果服务器返回answer需要将answer设置远端描述。
+                        如果是接收方则将offer设置到远端描述并创建answer同时将answer设置成本地描述然后向服务器发送answer。
+                    */
+                    this.userType = userType
+                    if(userType==='send'){
+                        this.localConnection()
+                    }else if(userType==='get'){
+                        this.remoteConnection(offer)
+                    }                
+                })
+            }
             this.pc.onicecandidate=(e)=>{
                 if(e.candidate){
                     this.socket.emit('candidate',e.candidate,this.room,this.userType) 
@@ -99,17 +96,34 @@ export default{
             }//在设置完媒体流以及本地描述后就会不断触发这个事件,此时的e.candidate有可能是null所以需加一层判断
             this.pc.ontrack=async(e)=>{
                 let remote = document.querySelector('#remote')
+                console.log(e.streams)
                 remote.srcObject =await e.streams[0]
                 remote.oncanplay=()=>{remote.play()}
-                let stream = new MediaStream()
-                stream.addTrack(e.streams[0])
-                this.remoteStream = stream
                 this.live = true
-            } //当远程描述设置完成就会触发ontrack
+            }//当远程描述设置完成就会触发ontrack
             this.disabledList = this.disabledList.map((a,i)=>i==index?true:false)
         },
         async mediaConsultation(){
 
+        },
+        async localConnection(){
+            this.userType = 'send'
+            let offer = await this.pc.createOffer()
+            await this.pc.setLocalDescription(offer)
+            this.socket.emit('sendOffer',offer,this.room)
+            this.socket.on('getAnswer',async(answer)=>{
+                await this.pc.setRemoteDescription(answer)
+                this.pc.addIceCandidate(this.candidate)
+            })
+            return offer
+        },
+        async remoteConnection(offer){
+            this.userType = 'get'
+            await this.pc.setRemoteDescription(offer)
+            let answer = await this.pc.createAnswer()
+            await this.pc.setLocalDescription(answer)
+            this.socket.emit('sendAnswer',answer,this.room)
+            this.pc.addIceCandidate(this.candidate)
         },
         screenShot(){
             if(!this.live) return //如果没有通信说明没有远端视频也就不用截图。
@@ -123,7 +137,7 @@ export default{
                 navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(()=>{}).catch((err)=>console.log(err))
             })      
         },//获取屏幕截图并复制到剪切板板上,
-        record(){
+        recordVideo(){
             if(this.record) return //如果在录制中就返回。
             const options = {
                 mimeType: 'video/webm',
@@ -143,12 +157,14 @@ export default{
         this.socket = io('localhost:3000')
     },
     mounted(){
-        // this.canvas = document.querySelector('#canvas')
-        // this.ctx = this.canvas.getContext('2d')
         this.user = localStorage.getItem('user')
         this.room = localStorage.getItem('room')
         this.socket.on('getCandidate',(candidate,userType)=>{
             this.candidate = candidate
+        })
+        this.socket.on('remoteChangeStream',(offer)=>{
+            this.pc.close()
+            this.remoteConnection(offer)
         })
         this.socket.emit('userjoinRoom',this.room) //测试用后面要删，没有登录界面所以得加入房间
     }
