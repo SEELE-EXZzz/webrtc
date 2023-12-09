@@ -1,19 +1,20 @@
 <template>
     <div id="main">
+  
         <div id="left">
             <div id="videoDiv">
                 <canvas id="canvas"></canvas>
-                <canvas id="screenShotCanvas" style="display: none;"></canvas>
-                <video src="" id="remote">
+                <!-- <canvas id="screenShotCanvas"></canvas> -->
+                <video id="remote">
                 </video>
-                <video src="" id="local"></video>        
-                <video src="" id="record" style="display: none;"></video>        
+                <video id="local"></video>  
+                <video id="recordVideo" autoplay="true" controls="true" v-show="showRecordVideo"></video>         
             </div>
             <div id="videoButton">
                 <el-button type="primary" class="button" @click="getStream(0,'camera')" :disabled="disabledList[0]">获取摄像头媒体流</el-button>
                 <el-button type="primary" class="button" @click="getStream(1,'desktop')" :disabled="disabledList[1]">获取桌面媒体流</el-button>
                 <el-button type="primary" class="button" @click="screenShot">获取屏幕截图</el-button>
-                <el-button type="primary" class="button" @click="record">录制视频</el-button>
+                <el-button type="primary" class="button" @click="recordVideo()">录制视频</el-button>
                 <el-button type="primary" class="button" @click="record">停止录制</el-button>
             </div>
         </div>
@@ -27,14 +28,17 @@
 import flvjs from 'flv.js'
 import io from 'socket.io-client'
 import chat from './chat.vue'
+// class Record{
+//     constructor(stream,options){
+//         this.stream = stream
+//     }
+// }
 export default{
     components:{
         chat
     },
     data(){
         return{
-            // canvas:'', //用于截图以及绘画
-            // ctx:'',
             record:false,
             user:'',
             room:'',
@@ -46,10 +50,40 @@ export default{
             pc:'', //pc为rtcpeerConnection的实例对象
             candidate:'',
             disabledList:[false,false,false,false],
-            live:false //判断是否在通信
+            live:false, //判断是否在通信,
+            recordVideoMove:false,
+            recordVideoMouseX:'',
+            recordVideoMouseY:'',
+            recordVideoLeft:'',
+            recordVideoTop:'',
+            sourceBuffer:'',
+            showRecordVideo:false,
         }
     },
     methods:{
+        //移动相关方法
+        async getFirstPostion(e){
+            e.preventDefault()
+            if(this.recordVideoMove) return
+            this.recordVideoMove = true
+            let left =await e.target.getBoundingClientRect().left
+            let top = await e.target.getBoundingClientRect().top
+            this.recordVideoLeft = left
+            this.recordVideoTop = top 
+            this.recordVideoMouseX = e.clientX
+            this.recordVideoMouseY = e.clientY
+        },
+        getMovePostion(e){
+            e.preventDefault()
+            if(!this.recordVideoMove) return
+            e.target.style.left = this.recordVideoLeft + e.clientX - this.recordVideoMouseX +'px'    
+            e.target.style.top = this.recordVideoTop + e.clientY - this.recordVideoMouseY +'px'    
+        },
+        getLastPostion(e){
+            e.preventDefault()
+            if(!this.recordVideoMove) return
+            this.recordVideoMove = false
+        },
         async getStream(index,type){
             if(type==='camera'){
                 this.stream = await navigator.mediaDevices.getUserMedia({video:true,audio:true})
@@ -96,7 +130,6 @@ export default{
             }//在设置完媒体流以及本地描述后就会不断触发这个事件,此时的e.candidate有可能是null所以需加一层判断
             this.pc.ontrack=async(e)=>{
                 let remote = document.querySelector('#remote')
-                console.log(e.streams)
                 remote.srcObject =await e.streams[0]
                 remote.oncanplay=()=>{remote.play()}
                 this.live = true
@@ -137,20 +170,37 @@ export default{
                 navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(()=>{}).catch((err)=>console.log(err))
             })      
         },//获取屏幕截图并复制到剪切板板上,
-        recordVideo(){
+        async recordVideo(){
             if(this.record) return //如果在录制中就返回。
+            this.showRecordVideo =  true 
             const options = {
-                mimeType: 'video/webm',
+                mimeType: 'video/webm;codecs=vp8',
                 audioBitsPerSecond: 128000,
                 videoBitsPerSecond: 2500000
             }
+            let remote = document.querySelector('#remote')
+            this.remoteStream =await remote.captureStream()
+            let video = document.querySelector('#recordVideo')
             let record = new MediaRecorder(this.remoteStream,options)
-            let blobList = []
             this.record = true
             record.start(1000)
+            let mediaSource = new MediaSource()
+            let sourceBuffer
+            video.src = URL.createObjectURL(mediaSource)
+            mediaSource.addEventListener('sourceopen',()=>{
+                const mimeCodec = 'video/webm;codecs="vp8",opus'
+                sourceBuffer = mediaSource.addSourceBuffer(mimeCodec)
+            })
             record.ondataavailable=(e)=>{
-                blobList.push(e.data)
-            }
+                const blob = e.data
+                    if (blob.size > 0) {
+                        const reader = new FileReader()
+                        reader.readAsArrayBuffer(blob)
+                        reader.onloadend = () => {
+                            sourceBuffer.appendBuffer(reader.result)
+                        }
+                    }
+                }
         }
     },
     created(){
@@ -181,9 +231,9 @@ export default{
     top: 90%;
     height: 10%;
     width: 100%;
-
 }
 #videoDiv{
+    position: relative;
     background-color: black;
     width: 100%;
     height: 90%;
@@ -204,6 +254,13 @@ export default{
     left: 80%;
     width: 20%;
     height: 20%;
+}
+#recordVideo{
+    /* display: none; */
+    position: absolute;
+    top: 70%;
+    width: 30%;
+    height: 30%;
 }
 #main{
     /* background-color: aqua; */
