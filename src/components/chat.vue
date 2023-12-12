@@ -219,33 +219,30 @@ export default{
                 }
             })
             this.chatMsgList.push(msg)
-            let read = new FileReader()
-            read.readAsDataURL(file)
-            // read.readAsArrayBuffer(file)
-            read.onload=(e)=>{
-                // 数据为数据URL,readAsDataURL触发的，这时要生成url发给img 
+            let readURL = new FileReader()
+            let readArrayBuffer = new FileReader()
+            readURL.readAsDataURL(file)
+            readArrayBuffer.readAsArrayBuffer(file)
+            readURL.onload=(e)=>{
                 let img = document.querySelector(`#_${timestamp}`)
                 img.src = e.target.result
-                img.onload=()=>{
-                    read.readAsArrayBuffer(file)
-                    read.onload=(e)=>{
-                        let arrayBuffer = e.target.result
-                        let type = file.type
-                        let name = file.name
-                        let sliceSize = 500*1024 //文件切片大小
-                        let total = Math.ceil(file.size/sliceSize) //切片众个数
-                        let size = file.size
-                        let fileIndex = 0
-                        let index = 0
-                        this.socket.emit('uploadImageStart',timestamp,total,file.size,this.room,msg)
-                        while(fileIndex<size){
-                            let arrayBufferUpload = arrayBuffer.slice(fileIndex,fileIndex+sliceSize)
-                            this.socket.emit('uploadImage',arrayBufferUpload,index,this.room,total,timestamp,type,name,size)
-                            fileIndex+=sliceSize
-                            index++
-                        }   
-                    }
-                }
+            }
+            readArrayBuffer.onload=(e)=>{
+                let arrayBuffer = e.target.result
+                let type = file.type
+                let name = file.name
+                let sliceSize = 500*1024 //文件切片大小
+                let total = Math.ceil(file.size/sliceSize) //切片众个数
+                let size = file.size
+                let fileIndex = 0
+                let index = 0
+                this.socket.emit('uploadImageStart',timestamp,total,file.size,this.room,msg)
+                while(fileIndex<size){
+                    let arrayBufferUpload = arrayBuffer.slice(fileIndex,fileIndex+sliceSize)
+                    this.socket.emit('uploadImage',arrayBufferUpload,index,this.room,total,timestamp,type,name,size)
+                    fileIndex+=sliceSize
+                    index++
+                }   
             }
         },
         fileSlice(file){
@@ -347,11 +344,18 @@ export default{
         }
     },
     created(){
-        this.socket = io('localhost:3000')
+        this.socket = io('https://localhost:443')
     },
     mounted(){
+        this.user = sessionStorage.getItem('user')
+        this.room = sessionStorage.getItem('room')
+        this.avatarURL = localStorage.getItem('avatar')
         this.socket.on('getChat',(msg)=>{
             this.chatMsgList.push(msg)
+        })
+        this.socket.emit('getOtherUser',this.room,this.user)
+        this.socket.on('otherUserJoinInRoom',(user)=>{
+            this.otherUser = user
         })
         this.socket.on('uploadFileSliceIndex',(index,total,fileName,timestamp)=>{
             let percent = document.querySelector(`#_${timestamp}`)
@@ -401,7 +405,6 @@ export default{
               percent.innerHTML = `上传进度:${num}`
             }else{
               let a = document.createElement('a')
-            //   let list = getFileMap.get(timestamp)
               a.download = true
               list.sort((a,b)=>{a.index-b.index})
               let result = new ArrayBuffer(size)
@@ -433,9 +436,6 @@ export default{
         this.socket.on('sendFileStart',(timestamp,total,size,msg)=>{
             this.chatMsgList.push(msg)
         })
-        this.user = localStorage.getItem('user')
-        this.room = localStorage.getItem('room')
-        this.avatarURL = localStorage.getItem('avatar')
         this.socket.emit('userjoinRoom',this.room) //测试用后面要删，没有登录界面所以得加入房间
     }
 }

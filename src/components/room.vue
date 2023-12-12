@@ -1,21 +1,20 @@
 <template>
     <div id="main">
-  
         <div id="left">
             <div id="videoDiv">
                 <canvas id="canvas"></canvas>
-                <!-- <canvas id="screenShotCanvas"></canvas> -->
-                <video id="remote">
-                </video>
+                <canvas id="screenShotCanvas" style="display: none;"></canvas>
+                <video id="remote"></video>
                 <video id="local"></video>  
                 <video id="recordVideo" autoplay="true" controls="true" v-show="showRecordVideo"></video>         
             </div>
             <div id="videoButton">
                 <el-button type="primary" class="button" @click="getStream(0,'camera')" :disabled="disabledList[0]">获取摄像头媒体流</el-button>
                 <el-button type="primary" class="button" @click="getStream(1,'desktop')" :disabled="disabledList[1]">获取桌面媒体流</el-button>
-                <el-button type="primary" class="button" @click="screenShot">获取屏幕截图</el-button>
-                <el-button type="primary" class="button" @click="recordVideo()">录制视频</el-button>
-                <el-button type="primary" class="button" @click="record">停止录制</el-button>
+                <el-button type="primary" class="button" @click="screenShot" title="获取远端屏幕截图">获取屏幕截图</el-button>
+                <el-button type="primary" class="button" @click="recordVideo" title="录制远端视频">录制视频</el-button>
+                <el-button type="primary" class="button" @click="stopRecordVideo" title="停止录制远端视频">停止录制</el-button>
+                <el-button type="primary" class="button" @click="downloadRecordVideo" title="下载录制视频">下载录制视频</el-button>
             </div>
         </div>
         <div id="right">
@@ -25,21 +24,16 @@
 </template>
 
 <script>
-import flvjs from 'flv.js'
 import io from 'socket.io-client'
 import chat from './chat.vue'
-// class Record{
-//     constructor(stream,options){
-//         this.stream = stream
-//     }
-// }
 export default{
     components:{
         chat
     },
     data(){
         return{
-            record:false,
+            record:'',
+            recordLive:false, //判断是否在录制
             user:'',
             room:'',
             socket:'',
@@ -51,6 +45,7 @@ export default{
             candidate:'',
             disabledList:[false,false,false,false],
             live:false, //判断是否在通信,
+            recordBlobList:[], //储存录制的视频流
             recordVideoMove:false,
             recordVideoMouseX:'',
             recordVideoMouseY:'',
@@ -165,13 +160,13 @@ export default{
             let remote = document.querySelector('#remote')
             screenShotCanvas.width = remote.videoWidth
             screenShotCanvas.height = remote.videoHeight
-            screenShotCtx.drawImage(remote,0,0,this.canvas.width,this.canvas.height)
+            screenShotCtx.drawImage(remote,0,0,screenShotCanvas.width,screenShotCanvas.height)
             screenShotCanvas.toBlob((blob)=>{
                 navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(()=>{}).catch((err)=>console.log(err))
             })      
         },//获取屏幕截图并复制到剪切板板上,
         async recordVideo(){
-            if(this.record) return //如果在录制中就返回。
+            if(this.recordLive) return //如果在录制中就返回。
             this.showRecordVideo =  true 
             const options = {
                 mimeType: 'video/webm;codecs=vp8',
@@ -182,7 +177,8 @@ export default{
             this.remoteStream =await remote.captureStream()
             let video = document.querySelector('#recordVideo')
             let record = new MediaRecorder(this.remoteStream,options)
-            this.record = true
+            this.record = record
+            this.recordLive = true
             record.start(1000)
             let mediaSource = new MediaSource()
             let sourceBuffer
@@ -193,29 +189,51 @@ export default{
             })
             record.ondataavailable=(e)=>{
                 const blob = e.data
+                this.recordBlobList.push(e.data)
                     if (blob.size > 0) {
-                        const reader = new FileReader()
-                        reader.readAsArrayBuffer(blob)
-                        reader.onloadend = () => {
-                            sourceBuffer.appendBuffer(reader.result)
+                        const read = new FileReader()
+                        read.readAsArrayBuffer(blob)
+                        read.onloadend = (e) => {
+                            sourceBuffer.appendBuffer(e.target.result)
                         }
                     }
                 }
+        },
+        stopRecordVideo(){
+            if(!this.record) return
+            this.record.stop()
+            this.showRecordVideo = false
+        },
+        downloadRecordVideo(){
+            if(!this.recordBlobList) return
+            let a = document.createElement('a')
+            let blob = new Blob(this.recordBlobList,{ type: 'video/mp4' })
+            let read = new FileReader()
+            a.download = true
+            read.readAsDataURL(blob)
+            read.onload=(e)=>{
+                let url = e.target.result
+                a.href = url
+                a.click()
+            }
         }
     },
     created(){
-        this.socket = io('localhost:3000')
+        this.socket = io('https://localhost:443')
+        if(sessionStorage.getItem('user')&&sessionStorage.getItem('room')){
+            this.user = sessionStorage.getItem('user')
+            this.room = sessionStorage.getItem('room')
+        }
     },
     mounted(){
-        this.user = localStorage.getItem('user')
-        this.room = localStorage.getItem('room')
+        if(sessionStorage.getItem('user')&&sessionStorage.getItem('room')){
+            this.user = sessionStorage.getItem('user')
+            this.room = sessionStorage.getItem('room')
+        }
         this.socket.on('getCandidate',(candidate,userType)=>{
             this.candidate = candidate
         })
-        this.socket.on('remoteChangeStream',(offer)=>{
-            this.pc.close()
-            this.remoteConnection(offer)
-        })
+
         this.socket.emit('userjoinRoom',this.room) //测试用后面要删，没有登录界面所以得加入房间
     }
 }
@@ -256,14 +274,12 @@ export default{
     height: 20%;
 }
 #recordVideo{
-    /* display: none; */
     position: absolute;
     top: 70%;
     width: 30%;
     height: 30%;
 }
 #main{
-    /* background-color: aqua; */
     position: absolute;
     width: 80%;
     height: 80%;
@@ -275,13 +291,12 @@ export default{
     position: absolute;
     width: 70%;
     height: 100%;
-    /* background-color: antiquewhite; */
+    background-color: antiquewhite;
 }
 #right{
     position: absolute;
     left: 70%;
     width: 30%;
     height: 100%;
-    /* background-color: blueviolet; */
 }
 </style>

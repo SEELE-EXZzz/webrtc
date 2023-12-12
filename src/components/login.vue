@@ -24,6 +24,7 @@
   
 <script>
 import io from 'socket.io-client'
+// import axios from 'axios'
   export default {
     name: 'login',
     data(){
@@ -51,7 +52,7 @@ import io from 'socket.io-client'
         }
     },
     created(){
-        this.socket = io('localhost:3000')
+        this.socket = io('https://localhost:443')
     },
     mounted(){
         this.socket.on('addNewRoom',(roomName)=>{
@@ -64,10 +65,13 @@ import io from 'socket.io-client'
             alert(msg)
         }) //如果某个房间满了就会触发这个
         this.socket.on('joinInRoom',(roomName,roomList)=>{
-            localStorage.setItem('room',this.roomNumber)
-            localStorage.setItem('user',this.userName)
+            sessionStorage.setItem('room',this.roomNumber)
+            sessionStorage.setItem('user',this.userName)
+            this.$router.push({name:'room'})
         })//成功加入房间，路由，启动。
-        
+        // if(sessionStorage.getItem('user')&&sessionStorage.getItem('room')){
+        //     this.$router.push({name:room})
+        // }
     }
   }
 </script>
